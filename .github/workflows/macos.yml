@@ -12,7 +12,7 @@ on:
 
 jobs:
   test:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Swift tests (settings, catalog + gzip, vetting, mood, image headers, favourites)
@@ -20,7 +20,7 @@ jobs:
 
   build:
     needs: test
-    runs-on: macos-14
+    runs-on: macos-15
     permissions:
       contents: write
     env:
