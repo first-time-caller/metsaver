@@ -24,8 +24,22 @@ static class Installer
     {
         Paths.Ensure();
         var self = Environment.ProcessPath!;
-        if (!string.Equals(Path.GetFullPath(self), Path.GetFullPath(Paths.InstalledScr), StringComparison.OrdinalIgnoreCase))
+        var srcDir = Path.GetDirectoryName(Path.GetFullPath(self))!;
+        var destDir = Path.GetDirectoryName(Paths.InstalledScr)!;
+        Directory.CreateDirectory(destDir);
+        if (!string.Equals(srcDir, destDir, StringComparison.OrdinalIgnoreCase))
+        {
+            // A framework-dependent build keeps its code in MetSaver.dll (plus config files) beside the exe, so the whole
+            // folder has to come along. A single-file build is just the exe. Only copy a folder that is clearly our build output.
+            if (File.Exists(Path.Combine(srcDir, "MetSaver.dll")))
+                foreach (var file in Directory.GetFiles(srcDir))
+                    if (!file.EndsWith(".scr", StringComparison.OrdinalIgnoreCase))
+                        File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), overwrite: true);
             File.Copy(self, Paths.InstalledScr, overwrite: true);
+        }
+        // Older versions installed a lone launcher straight into the data folder; remove that leftover.
+        var legacy = Path.Combine(Paths.Home, "MetSaver.scr");
+        if (File.Exists(legacy)) { try { File.Delete(legacy); } catch { } }
 
         var current = CurrentScreensaver();
         if (!string.IsNullOrEmpty(current) && !string.Equals(current, Paths.InstalledScr, StringComparison.OrdinalIgnoreCase))

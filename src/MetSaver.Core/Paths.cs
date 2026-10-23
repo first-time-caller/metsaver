@@ -12,7 +12,7 @@ public static class Paths
     public static string HistoryFile => Path.Combine(Home, "seen.json");
     public static string LogFile => Path.Combine(Home, "log.txt");
     /// <summary>The copy of the app Windows launches as the screensaver.</summary>
-    public static string InstalledScr => Path.Combine(Home, "MetSaver.scr");
+    public static string InstalledScr => Path.Combine(Home, "app", "MetSaver.scr");
 
     public static void Ensure()
     {
