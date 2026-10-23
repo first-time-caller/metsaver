@@ -1,0 +1,62 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test MetSaver.sln -c Release
+
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Version from tag
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      # Self-contained single file: nothing to install first (about 70 MB).
+      - name: Publish self-contained
+        run: >
+          dotnet publish src/MetSaver/MetSaver.csproj -c Release -r win-x64 --self-contained
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true -p:Version=${{ env.VERSION }} -o publish
+
+      # Small build for people who already have the .NET 8 Desktop Runtime (about 1 MB).
+      - name: Publish framework-dependent
+        run: >
+          dotnet publish src/MetSaver/MetSaver.csproj -c Release -r win-x64 --no-self-contained
+          -p:PublishSingleFile=true -p:Version=${{ env.VERSION }} -o publish-small
+
+      - name: Build installer
+        run: iscc installer\MetSaver.iss /DAppVersion=${{ env.VERSION }} /DSourceExe=..\publish\MetSaver.exe
+
+      - name: Collect assets
+        shell: bash
+        run: |
+          mkdir dist
+          cp installer/Output/MetSaver-Setup.exe dist/
+          cp publish/MetSaver.exe dist/MetSaver.scr
+          cp publish-small/MetSaver.exe dist/MetSaver-small.scr
+          cd dist && sha256sum * > SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

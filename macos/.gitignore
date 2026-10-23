@@ -1,0 +1,5 @@
+build/
+MetSaver.xcodeproj/
+Resources/catalog.json.gz
+.build/
+*.xcuserstate

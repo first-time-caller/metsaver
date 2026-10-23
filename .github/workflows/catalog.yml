@@ -1,0 +1,33 @@
+name: catalog
+
+# Rebuilds the vetted painting catalog from the Met's API once a month and publishes it as a rolling release asset.
+# The app downloads it from  https://github.com/<owner>/<repo>/releases/download/catalog/catalog.json.gz
+# (set "catalog_url" in config.json, or ship it as the default) so users get new paintings without updating the app.
+on:
+  schedule:
+    - cron: "0 4 1 * *"
+  workflow_dispatch:
+
+jobs:
+  build-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Download the Met Open Access CSV (about 340 MB; build-time only, never shipped)
+        run: curl -fsSL -o MetObjects.csv https://media.githubusercontent.com/media/metmuseum/openaccess/master/MetObjects.csv
+      - name: Distil it into the compact catalog
+        run: dotnet run --project tools/CatalogBuilder -c Release -- catalog.json.gz --csv MetObjects.csv
+      - name: Sanity check
+        run: test "$(stat -c %s catalog.json.gz)" -gt 20000
+      - name: Publish rolling "catalog" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view catalog >/dev/null 2>&1 || gh release create catalog --title "Painting catalog" --notes "Automatically rebuilt monthly. Used by MetSaver for fast, pre-vetted painting selection."
+          gh release upload catalog catalog.json.gz --clobber

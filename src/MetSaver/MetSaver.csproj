@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>MetSaver</AssemblyName>
+    <RootNamespace>MetSaver</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <Version>1.0.0</Version>
+    <Product>MetSaver</Product>
+    <Description>Screensaver showing public-domain paintings from The Metropolitan Museum of Art</Description>
+    <!-- Program.Main is hand-written (screensaver argument handling), so there is no App.xaml. -->
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('..\..\data\catalog.json.gz')">
+    <EmbeddedResource Include="..\..\data\catalog.json.gz" LogicalName="catalog.json.gz" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MetSaver.Core\MetSaver.Core.csproj" />
+  </ItemGroup>
+</Project>

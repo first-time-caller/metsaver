@@ -1,0 +1,42 @@
+# XcodeGen spec: generates MetSaver.xcodeproj, whose single target builds the MetSaver.saver bundle.
+# A .saver is a Mach-O *bundle* with a principal class that ScreenSaver.framework instantiates, so it needs a real
+# Xcode target (SwiftPM can't produce one). Run scripts/build-saver.sh rather than using this directly.
+name: MetSaver
+options:
+  bundleIdPrefix: com.metsaver
+  deploymentTarget:
+    macOS: "12.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+targets:
+  MetSaver:
+    type: bundle
+    platform: macOS
+    sources:
+      - path: Sources/MetSaverCore          # compiled straight into the bundle (one module, so no import needed)
+      - path: Sources/MetSaverSaver
+      - path: Resources/catalog.json.gz     # copied from ../data by the build script
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: MetSaver
+        PRODUCT_BUNDLE_IDENTIFIER: com.metsaver.saver
+        WRAPPER_EXTENSION: saver
+        MACH_O_TYPE: mh_bundle
+        INFOPLIST_FILE: Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ARCHS: "arm64 x86_64"
+        ONLY_ACTIVE_ARCH: NO
+        SKIP_INSTALL: YES
+        DEFINES_MODULE: NO
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) /usr/lib/swift @loader_path/../Frameworks"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"                # ad-hoc by default; the release workflow overrides this with a Developer ID
+        ENABLE_HARDENED_RUNTIME: NO
+    dependencies:
+      - sdk: ScreenSaver.framework
+      - sdk: IOKit.framework
+      - sdk: QuartzCore.framework

@@ -1,0 +1,77 @@
+name: macos
+
+# Builds the macOS screensaver (macos/), runs its tests, and on a version tag attaches the dmg/zip to the same release the
+# Windows build creates. Signing and notarization happen only if the repository has the secrets listed below; without them
+# the saver is ad-hoc signed and macOS will ask the user to approve it once (see README).
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift tests (settings, catalog + gzip, vetting, mood, image headers, favourites)
+        run: swift test --package-path macos
+
+  build:
+    needs: test
+    runs-on: macos-14
+    permissions:
+      contents: write
+    env:
+      # Optional secrets: a Developer ID Application certificate (.p12, base64) and its password, plus Apple notarization
+      # credentials (an app-specific password for APPLE_ID). Missing secrets just skip signing/notarizing.
+      HAS_SIGNING: ${{ secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+
+      - name: Import signing certificate
+        if: env.HAS_SIGNING == 'true'
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p ci "$RUNNER_TEMP/ci.keychain"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/ci.keychain"
+          security unlock-keychain -p ci "$RUNNER_TEMP/ci.keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$RUNNER_TEMP/ci.keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k ci "$RUNNER_TEMP/ci.keychain"
+          security list-keychains -d user -s "$RUNNER_TEMP/ci.keychain" login.keychain
+          IDENTITY=$(security find-identity -v -p codesigning "$RUNNER_TEMP/ci.keychain" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.+)"/\1/')
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build the universal .saver, zip and dmg
+        run: bash macos/scripts/build-saver.sh
+
+      - name: Notarize and staple the dmg
+        if: env.HAS_SIGNING == 'true' && env.HAS_NOTARY == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit macos/build/out/MetSaver-mac.dmg --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple macos/build/out/MetSaver-mac.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MetSaver-mac
+          path: |
+            macos/build/out/MetSaver-mac.dmg
+            macos/build/out/MetSaver-mac.zip
+
+      - name: Attach to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            macos/build/out/MetSaver-mac.dmg
+            macos/build/out/MetSaver-mac.zip
