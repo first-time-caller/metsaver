@@ -16,7 +16,9 @@ xcodegen generate --quiet
 IDENTITY="${SIGN_IDENTITY:--}"
 rm -rf build
 xcodebuild -project MetSaver.xcodeproj -scheme MetSaver -configuration Release \
+  -destination 'generic/platform=macOS' \
   -derivedDataPath build/derived \
+  ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
   CODE_SIGN_IDENTITY="$IDENTITY" CODE_SIGN_STYLE=Manual \
   ${SIGN_IDENTITY:+OTHER_CODE_SIGN_FLAGS=--timestamp} \
   build | tail -n 25
@@ -26,7 +28,12 @@ SAVER="build/derived/Build/Products/Release/MetSaver.saver"
 mkdir -p build/out
 cp -R "$SAVER" build/out/MetSaver.saver
 
-echo "--- architectures:"; lipo -archs build/out/MetSaver.saver/Contents/MacOS/MetSaver
+ARCHS_BUILT="$(lipo -archs build/out/MetSaver.saver/Contents/MacOS/MetSaver)"
+echo "--- architectures: $ARCHS_BUILT"
+case "$ARCHS_BUILT" in
+  *arm64*x86_64*|*x86_64*arm64*) ;;
+  *) echo "expected a universal binary (arm64 + x86_64), got: $ARCHS_BUILT" >&2; exit 1 ;;
+esac
 echo "--- signature:";     codesign -dv build/out/MetSaver.saver 2>&1 | head -n 6 || true
 
 ( cd build/out && ditto -c -k --keepParent MetSaver.saver MetSaver-mac.zip )
